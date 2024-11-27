@@ -13,11 +13,11 @@ const NFT_CAVE_KEY = "CaveLabyrints";
 const NFT_KEY_KEY = "LabyrintsKeys";
 const MAX_CAVE_NFT = 1000;
 const MAX_KEY_NFT = 500;
-const PRICE = 100_000_000_000 as u64; // 0.1 MAS in native units, přetypováno na u64
+const PRICE = 100_000_000_000 as u64; // 0.1 MAS
 const BURN_ADDRESS = "0000000000000000000000000000000000000000000000000000";
 
 // Adresa vlastníka kontraktu
-const CONTRACT_OWNER = "AU125B4vA84Fbq4kAs5fX15JJ3AkUneA3YKDyJseQxv7Cmv9EDSc6"; // Zde vložte skutečnou adresu vlastníka
+const CONTRACT_OWNER = "AU125B4vA84Fbq4kAs5fX15JJ3AkUneA3YKDyJseQxv7Cmv9EDSc6";
 
 // Initialize storage
 export function constructor(): void {
@@ -25,18 +25,29 @@ export function constructor(): void {
   setCounter("KeyCounter", 0);
 }
 
-// Mint NFT function
+// Funkce pro veřejné mintování NFT
 export function mintNFT(): void {
   const payment = Context.transferredCoins();
   const caller = Context.caller();
 
-  // Pokud je volající vlastník kontraktu, mint je zdarma
   if (caller.toString() === CONTRACT_OWNER) {
-    console.log("Minting NFT for contract owner without charge");
+    console.log("Minting NFT for contract owner without charge.");
   } else {
-    assert(payment >= PRICE, "Insufficient payment, 0.1 MAS required.");
+    assert(payment >= PRICE, "Insufficient payment. At least 0.1 MAS is required.");
   }
 
+  mintProcess(caller.toString());
+}
+
+// Funkce pro mintování NFT vlastníkem zdarma (bezplatné mintování)
+export function mintForOwner(): void {
+  const caller = Context.caller();
+  assert(caller.toString() === CONTRACT_OWNER, "Only the contract owner can mint for free.");
+  mintProcess(caller.toString());
+}
+
+// Proces mintování NFT
+function mintProcess(callerAddress: string): void {
   let caveCounter = getCounter("CaveCounter");
   let keyCounter = getCounter("KeyCounter");
 
@@ -47,21 +58,21 @@ export function mintNFT(): void {
   caveCounter++;
   const caveMetadata = `${NUMBER_KEY}: #${caveCounter}, ${STATUS_KEY}: ${LOCKED_STATUS}, ${GEMSTONE_KEY}: ${getRandomGemstone()}`;
   Storage.set(stringToBytes(`${NFT_CAVE_KEY}_${caveCounter}`), stringToBytes(caveMetadata));
-  generateEvent(`Minted CaveLabyrints #${caveCounter} for ${Context.caller().toString()}. Metadata: ${caveMetadata}`);
+  generateEvent(`Minted CaveLabyrints #${caveCounter} for ${callerAddress}. Metadata: ${caveMetadata}`);
 
   // Mint LabyrintsKeys NFT only for even CaveLabyrints
   if (caveCounter % 2 === 0) {
     keyCounter++;
     const keyMetadata = `${NUMBER_KEY}: #${keyCounter}`;
     Storage.set(stringToBytes(`${NFT_KEY_KEY}_${keyCounter}`), stringToBytes(keyMetadata));
-    generateEvent(`Minted LabyrintsKeys #${keyCounter} for ${Context.caller().toString()}. Metadata: ${keyMetadata}`);
+    generateEvent(`Minted LabyrintsKeys #${keyCounter} for ${callerAddress}. Metadata: ${keyMetadata}`);
     setCounter("KeyCounter", keyCounter);
   }
 
   setCounter("CaveCounter", caveCounter);
 }
 
-// Unlock CaveLabyrints
+// Funkce pro odemykání jeskyní
 export function unlockCave(caveNumber: u64): void {
   const caveKey = `${NFT_CAVE_KEY}_${caveNumber}`;
   assert(Storage.has(stringToBytes(caveKey)), "CaveLabyrints NFT does not exist.");
@@ -97,6 +108,9 @@ function getRandomGemstone(): string {
 
 // Helper functions for counter management
 function getCounter(counterName: string): u64 {
+  if (!Storage.has(stringToBytes(counterName))) {
+    return 0;
+  }
   return bytesToU64(Storage.get(stringToBytes(counterName)));
 }
 
